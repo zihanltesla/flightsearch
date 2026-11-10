@@ -14,11 +14,18 @@
 └──────────────────────────┘                         └────────────────────────────┘
 ```
 
-- **后端**：FastAPI + [Amadeus Self-Service API](https://developers.amadeus.com/)（免费测试环境），低价日历接口 `flight-dates` 一次查询返回区间内每天的最低票价，后端把去程 × 返程组合出所有日期组合并按总价排序。内置缓存减少 API 配额消耗。
+- **后端**：FastAPI + 多个可选数据源（自动选择：Amadeus → SerpApi → 演示数据）。低价日历接口一次查询返回区间内每天的最低票价，后端把去程 × 返程组合出所有日期组合并按总价排序。内置缓存减少 API 配额消耗。
 - **前端**：纯 HTML/CSS/JS（无构建），部署在 GitHub Pages；通过 `fetch` 访问本机后端（已处理 CORS 与 Chrome Private Network Access 预检）。
 - **数据源可扩展**：`backend/providers/base.py` 定义了 Provider 接口，新增平台只需实现 3 个方法并在 `main.py` 注册。
 
-> 为什么用 Amadeus 而不是 Skyscanner：Skyscanner 没有公开免费 API（仅面向企业合作伙伴）。Amadeus 为开发者提供免费自助测试环境，包含低价日历与航班报价接口。
+> 为什么没有 Skyscanner：它没有公开免费 API（仅面向企业合作伙伴）。以下两个数据源都有免费额度：
+>
+> | | Amadeus | SerpApi（Google Flights） |
+> |---|---|---|
+> | 注册难度 | 邮箱验证（偶有收不到验证邮件的问题） | **最简单**：Google/GitHub 账号直接登录 |
+> | 免费额度 | 每个 API 每月若干千次（测试环境） | 100 次搜索/月，重复查询走缓存不计费 |
+> | 数据 | GDS 缓存数据 | Google Flights 数据（覆盖最全，含廉航） |
+> | 组合搜索消耗 | 每次搜索 2~4 次调用 | 每次搜索 2 次调用（日历引擎） |
 
 ## 快速开始
 
@@ -32,13 +39,25 @@ cd backend
 
 启动后直接访问 **http://localhost:8000** 即可使用完整应用（后端同时托管前端页面）。未配置密钥时使用**演示数据**（模拟价格），开箱即用。
 
-### 2. （可选）接入 Amadeus 真实价格
+### 2. 接入真实价格（二选一，推荐先试 SerpApi）
+
+#### 方式 A：SerpApi（注册最简单，推荐）
+
+1. 打开 https://serpapi.com → 右上角 **Sign up**，直接用 **Google / GitHub 账号**登录（无需邮箱验证）；
+2. 登录后打开 https://serpapi.com/manage-api-key 复制 API Key；
+3. 填入 `backend/.env`（复制自 `.env.example`）：`SERPAPI_API_KEY=你的Key`；
+4. 重启后端，页面数据源即自动切换为 Google Flights 真实数据。
+
+> 免费套餐：100 次搜索/月。本应用一次组合搜索只消耗 **2 次**调用（日历引擎一次返回区间内每天价格），相同查询结果有缓存，个人使用足够。注意：SerpApi 的日历接口不支持"仅直飞"过滤（会被忽略）。
+
+#### 方式 B：Amadeus（GDS 直连）
 
 1. 注册 https://developers.amadeus.com → **My Self-Service Workspace → My Apps → Create new app**，环境选 **Test**；
-2. 把 API Key / API Secret 填入 `backend/.env`（复制自 `.env.example`）；
-3. 重启后端，页面数据源即自动切换为 Amadeus。
+2. 把 API Key / API Secret 填入 `backend/.env`；
+3. 重启后端，数据源自动切换为 Amadeus（两个都配置时优先 Amadeus）。
 
 > 免费测试环境有调用配额（低价日历约 2000 次/月），后端已内置结果缓存。测试环境的数据与价格仅用于开发验证。
+> 注册问题排查：验证邮件可能在垃圾箱；也试试换一个邮箱或代理网络。
 
 ### 3. 部署前端到 GitHub Pages
 
@@ -75,6 +94,7 @@ cd backend
 ## 常见问题
 
 - **页面提示「后端未连接」**：确认后端已在本机启动（`cd backend && ./start.sh`）；若前端部署在 GitHub Pages，请确认浏览器允许页面访问 localhost（Chrome/Safari/Firefox 均支持，后端已返回 PNA 预检头）。最简单的验证方式：直接打开 `http://localhost:8000`。
+- **SerpApi 配额用完**：报错中带 SerpApi 字样且提示额度时，等次月刷新或升级套餐；相同查询结果缓存 30 分钟内不重复计费。
 - **价格为什么带 ≈**：Amadeus 低价日历接口返回航线本地币种，后端按静态参考汇率换算成所选货币，仅供参考。
 - **想从手机访问**：把 `backend/.env` 中 `HOST` 改为 `0.0.0.0` 并重启，手机浏览器直接访问 `http://<电脑局域网IP>:8000`（HTTP 页面访问 HTTP 后端，无跨域限制）。
 - **切换生产环境**：`AMADEUS_ENV=production`（需在 Amadeus 申请生产环境，通过审核后可用真实价格数据）。
@@ -90,7 +110,8 @@ backend/
   providers/
     base.py          # Provider 抽象接口（扩展新平台在此实现）
     mock.py          # 演示数据源（130+ 机场，模拟价格）
-    amadeus.py       # Amadeus Self-Service API（真实价格）
+    amadeus.py       # Amadeus Self-Service API（GDS 数据）
+    serpapi.py       # SerpApi / Google Flights（注册最简单，推荐）
 frontend/            # 前端（部署到 GitHub Pages）
   index.html  css/style.css  js/app.js
 ```

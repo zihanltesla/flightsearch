@@ -22,6 +22,7 @@ from currency import SUPPORTED_CURRENCIES, convert_price
 from providers.amadeus import AmadeusProvider
 from providers.base import DayPrice, Provider, ProviderError
 from providers.mock import MockProvider
+from providers.serpapi import SerpApiProvider
 
 MAX_WINDOW_DAYS = 60   # 单个日期区间最大跨度
 CHUNK_DAYS = 30        # 低价日历接口每次最多查询的天数
@@ -57,6 +58,11 @@ amadeus = (
     if config.amadeus_configured()
     else None
 )
+serpapi = (
+    SerpApiProvider(config.SERPAPI_API_KEY, cache=_cache)
+    if config.serpapi_configured()
+    else None
+)
 
 
 def resolve_provider(requested: str) -> tuple[Provider, Optional[str]]:
@@ -71,10 +77,19 @@ def resolve_provider(requested: str) -> tuple[Provider, Optional[str]]:
                 detail="尚未配置 Amadeus API 密钥（backend/.env），请先在「设置」中切换为演示数据，或按 README 完成配置。",
             )
         return amadeus, None
+    if requested == "serpapi":
+        if serpapi is None:
+            raise HTTPException(
+                status_code=400,
+                detail="尚未配置 SerpApi API Key（backend/.env），请先在「设置」中切换为演示数据，或按 README 完成配置。",
+            )
+        return serpapi, None
     # auto
     if amadeus is not None:
         return amadeus, None
-    return mock, "未配置 Amadeus API 密钥，当前为演示数据（模拟价格），配置方法见 README。"
+    if serpapi is not None:
+        return serpapi, None
+    return mock, "未配置任何真实数据源（Amadeus / SerpApi），当前为演示数据（模拟价格），配置方法见 README。"
 
 
 def parse_date(value: str, label: str) -> date:
@@ -313,7 +328,12 @@ async def airports(
 ):
     if not q.strip():
         return []
-    p, _ = resolve_provider(provider)
+    try:
+        p, _ = resolve_provider(provider)
+    except HTTPException:
+        p = mock  # 所选数据源未配置时，机场联想仍使用内置列表
+    if p.name == "serpapi":
+        p = mock  # SerpApi 无机场联想接口，使用内置机场列表（不消耗额度）
     try:
         items = await p.search_airports(q.strip(), limit)
     except ProviderError as exc:
@@ -327,7 +347,10 @@ async def health():
         "status": "ok",
         "version": config.APP_VERSION,
         "amadeus_configured": amadeus is not None,
-        "providers": ["mock"] + (["amadeus"] if amadeus is not None else []),
+        "serpapi_configured": serpapi is not None,
+        "providers": ["mock"]
+        + (["amadeus"] if amadeus is not None else [])
+        + (["serpapi"] if serpapi is not None else []),
     }
 
 
@@ -337,7 +360,12 @@ if config.FRONTEND_DIR.is_dir():
 
 
 def main() -> None:
-    mode = "Amadeus（真实价格）" if amadeus else "演示数据（模拟价格，未配置 Amadeus）"
+    if amadeus:
+        mode = "Amadeus（真实价格）"
+    elif serpapi:
+        mode = "SerpApi / Google Flights（真实价格）"
+    else:
+        mode = "演示数据（模拟价格，未配置真实数据源）"
     print("=" * 52)
     print("  FlightSearch 后端已启动")
     print(f"  访问地址 : http://localhost:{config.PORT}")

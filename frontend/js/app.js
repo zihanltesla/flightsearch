@@ -89,8 +89,9 @@ async function refreshHealth() {
   const pill = el("health-pill");
   try {
     const h = await api("GET", "/api/health");
+    const src = h.amadeus_configured ? "Amadeus" : (h.serpapi_configured ? "SerpAPI" : "演示模式");
     pill.className = "pill pill-good";
-    pill.textContent = h.amadeus_configured ? "后端已连接 · Amadeus" : "后端已连接 · 演示模式";
+    pill.textContent = "后端已连接 · " + src;
     pill.title = "后端运行正常，点击打开设置";
   } catch {
     pill.className = "pill pill-critical";
@@ -529,7 +530,8 @@ function bindSettings() {
     res.textContent = "测试中…";
     try {
       const h = await api("GET", "/api/health", null, base);
-      res.textContent = `✅ 连接成功 · ${h.amadeus_configured ? "Amadeus 已配置" : "演示模式"}（后端 v${h.version}）`;
+      const src = h.amadeus_configured ? "Amadeus" : (h.serpapi_configured ? "SerpAPI" : "演示模式");
+      res.textContent = `✅ 连接成功 · 数据源 ${src}（后端 v${h.version}）`;
     } catch (err) {
       res.textContent = `❌ ${err.message}`;
     }

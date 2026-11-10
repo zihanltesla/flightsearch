@@ -28,9 +28,16 @@ AMADEUS_ENV = os.getenv("AMADEUS_ENV", "test").strip().lower()
 AMADEUS_CLIENT_ID = os.getenv("AMADEUS_CLIENT_ID", "").strip()
 AMADEUS_CLIENT_SECRET = os.getenv("AMADEUS_CLIENT_SECRET", "").strip()
 
+# SerpApi（Google Flights 数据）免费套餐 100 次搜索/月
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "").strip()
+
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 APP_VERSION = "0.1.0"
 
 
 def amadeus_configured() -> bool:
     return bool(AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET)
+
+
+def serpapi_configured() -> bool:
+    return bool(SERPAPI_API_KEY)
