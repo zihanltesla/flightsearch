@@ -212,6 +212,7 @@ async function onSearch(e) {
     const data = await api("POST", "/api/search", lastPayload);
     lastResult = data;
     renderResults(data);
+    el("results").scrollIntoView({ behavior: "smooth", block: "start" });
     refreshHealth();
   } catch (err2) {
     showFormError(err2.message + (err2.status === 502 ? "（也可以在「设置」中切换为演示数据后重试）" : ""));
