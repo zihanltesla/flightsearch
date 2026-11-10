@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlightSearch · 机票低价日历</title>
+<meta name="description" content="在指定时间段内查找两个城市之间最便宜的往返日期组合">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">✈ <span class="accent">FlightSearch</span></div>
+  <div class="topbar-right">
+    <button id="health-pill" class="pill" title="点击打开设置">检测后端中…</button>
+    <button id="settings-btn" class="btn-ghost" type="button">⚙ 设置</button>
+  </div>
+</header>
+
+<main>
+  <section class="card form-card">
+    <h1>查找一段时间内最便宜的往返组合</h1>
+    <p class="form-sub">输入出发地、目的地和日期区间，比较区间内每一天的票价，找出最低的「去程 + 返程」组合。</p>
+
+    <form id="search-form" autocomplete="off">
+      <div class="form-grid">
+        <div class="field f-origin">
+          <label for="origin">出发地</label>
+          <div class="airport-box">
+            <input type="text" id="origin" placeholder="城市或机场代码，如 SFO" maxlength="40" required>
+            <div class="suggest" hidden></div>
+          </div>
+        </div>
+
+        <button type="button" id="swap" class="swap-btn" title="交换出发地与目的地" aria-label="交换出发地与目的地">⇄</button>
+
+        <div class="field f-dest">
+          <label for="dest">目的地</label>
+          <div class="airport-box">
+            <input type="text" id="dest" placeholder="城市或机场代码，如 NRT" maxlength="40" required>
+            <div class="suggest" hidden></div>
+          </div>
+        </div>
+
+        <div class="field f-dep">
+          <label>出发日期区间</label>
+          <div class="range2">
+            <input type="date" id="dep-from" required aria-label="出发开始日期">
+            <span class="range-sep">–</span>
+            <input type="date" id="dep-to" required aria-label="出发结束日期">
+          </div>
+        </div>
+
+        <div class="field f-ret" id="return-field">
+          <label>返程日期区间</label>
+          <div class="range2">
+            <input type="date" id="ret-from" aria-label="返程开始日期">
+            <span class="range-sep">–</span>
+            <input type="date" id="ret-to" aria-label="返程结束日期">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row2">
+        <div class="field">
+          <label for="adults">人数</label>
+          <select id="adults">
+            <option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="currency">货币</label>
+          <select id="currency">
+            <option value="CNY">CNY ¥</option>
+            <option value="USD">USD $</option>
+            <option value="EUR">EUR €</option>
+            <option value="GBP">GBP £</option>
+            <option value="JPY">JPY ¥</option>
+            <option value="HKD">HKD $</option>
+            <option value="SGD">SGD $</option>
+            <option value="AUD">AUD $</option>
+            <option value="CAD">CAD $</option>
+            <option value="KRW">KRW ₩</option>
+            <option value="TWD">TWD $</option>
+            <option value="THB">THB ฿</option>
+          </select>
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="nonstop"> 仅直飞</label>
+          <label class="check"><input type="checkbox" id="oneway"> 单程</label>
+        </div>
+        <div class="spacer"></div>
+        <button type="submit" id="search-btn" class="btn-primary">搜索最低价</button>
+      </div>
+    </form>
+    <div id="form-error" class="form-error" hidden></div>
+  </section>
+
+  <section id="results" hidden>
+    <div id="notice" class="notice" hidden></div>
+
+    <div class="summary-row">
+      <div class="stat">
+        <div class="stat-label">最低往返组合</div>
+        <div class="stat-value" id="stat-best">—</div>
+        <div class="stat-note" id="stat-best-note"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">已比较组合</div>
+        <div class="stat-value" id="stat-count">—</div>
+        <div class="stat-note">去程日期 × 返程日期</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">数据源</div>
+        <div class="stat-value" id="stat-provider">—</div>
+        <div class="stat-note" id="stat-provider-note"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>价格日历</h2>
+        <div class="legend" id="legend" aria-hidden="true"></div>
+      </div>
+      <div class="hm-scroll"><div id="heatmap"></div></div>
+      <p class="hint">颜色越深价格越高 · 悬停查看价格 · 点击查看航班详情</p>
+    </div>
+
+    <div class="card" id="combos-card">
+      <div class="card-head">
+        <h2>最便宜组合</h2>
+        <span class="hint" id="combos-hint"></span>
+      </div>
+      <div id="combos"></div>
+    </div>
+  </section>
+
+  <section id="empty-state" class="card empty">
+    <h2>如何使用</h2>
+    <p>输入出发地、目的地和日期区间，点击「搜索最低价」，即可查看该时间段内每天的价格热力图和最便宜的往返组合。</p>
+    <p class="hint">未配置 API 密钥时使用内置演示数据；接入 Amadeus 免费密钥后可查询真实价格（见 README）。</p>
+  </section>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+
+<!-- 设置 -->
+<div id="settings-modal" class="modal-backdrop" hidden>
+  <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <h2 id="settings-title">设置</h2>
+    <label>后端地址
+      <input type="text" id="set-backend" placeholder="http://localhost:8000" spellcheck="false">
+    </label>
+    <label>数据源
+      <select id="set-provider">
+        <option value="auto">自动（优先 Amadeus，未配置时用演示数据）</option>
+        <option value="amadeus">Amadeus（真实价格，需密钥）</option>
+        <option value="mock">演示数据（模拟价格）</option>
+      </select>
+    </label>
+    <div id="conn-result" class="conn-result"></div>
+    <div class="modal-actions">
+      <button id="test-conn" class="btn-ghost" type="button">测试连接</button>
+      <button id="save-settings" class="btn-primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 航班详情 -->
+<div id="detail-modal" class="modal-backdrop" hidden>
+  <div class="modal card wide" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <h2 id="detail-title"></h2>
+    <div id="detail-body"></div>
+    <div class="modal-actions">
+      <a id="detail-gf" class="btn-ghost" target="_blank" rel="noopener noreferrer">在 Google Flights 查看 ↗</a>
+      <button id="detail-close" class="btn-primary" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>价格仅供参考，实际以航司 / OTA 为准。演示数据为模拟价格。数据源：Amadeus Self-Service API。</p>
+</footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>
