@@ -109,7 +109,7 @@ backend/
   cache.py           # TTL 内存缓存
   providers/
     base.py          # Provider 抽象接口（扩展新平台在此实现）
-    mock.py          # 演示数据源（130+ 机场，模拟价格）
+    mock.py          # 演示数据源 + 机场联想列表（140+ 机场，英文名，含北欧与德国主要机场）
     amadeus.py       # Amadeus Self-Service API（GDS 数据）
     serpapi.py       # SerpApi / Google Flights（注册最简单，推荐）
 frontend/            # 前端（部署到 GitHub Pages）
