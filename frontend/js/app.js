@@ -456,15 +456,23 @@ function renderOffers(offers, body) {
     body.innerHTML = `<p class="hint">该日期组合暂时没有可展示的航班报价。</p>`;
     return;
   }
-  body.innerHTML = offers.map((o, i) => `
+  body.innerHTML = offers.map((o, i) => {
+    const breakdown = (o.outbound_price != null && o.inbound_price != null)
+      ? `<span class="hint">去程 ${fmtPrice(o.outbound_price, o.currency)} + 返程 ${fmtPrice(o.inbound_price, o.currency)}</span>`
+      : "";
+    return `
     <div class="offer">
       <div class="offer-head">
         <span class="offer-price">${fmtPrice(o.price_total, o.currency)}${i === 0 ? '<span class="best-tag">最低</span>' : ""}</span>
-        <span class="hint">总时长 ${fmtDuration((o.outbound_duration_minutes || 0) + (o.inbound_duration_minutes || 0))}</span>
+        <span class="hint">${breakdown}${breakdown ? " · " : ""}总时长 ${fmtDuration((o.outbound_duration_minutes || 0) + (o.inbound_duration_minutes || 0))}</span>
       </div>
       ${journeyHtml("去程", o.outbound)}
       ${o.inbound && o.inbound.length ? journeyHtml("返程", o.inbound) : ""}
-    </div>`).join("");
+    </div>`;
+  }).join("");
+  if (offers.some((o) => o.inbound && o.inbound.length)) {
+    body.insertAdjacentHTML("beforeend", `<p class="hint">价格为两段单程票价之和，往返同订可能有更优票价，可在 Google Flights 中确认。</p>`);
+  }
 }
 
 function journeyHtml(title, segs) {

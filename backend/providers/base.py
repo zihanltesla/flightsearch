@@ -39,6 +39,8 @@ class FlightOffer:
     currency: str
     outbound: list[Segment] = field(default_factory=list)
     inbound: list[Segment] = field(default_factory=list)
+    outbound_price: Optional[float] = None  # 单程分段价（SerpApi 等按两段单程组合的报价）
+    inbound_price: Optional[float] = None
 
 
 class ProviderError(Exception):

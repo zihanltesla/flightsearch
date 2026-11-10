@@ -72,51 +72,56 @@ class SerpApiProvider(Provider):
         return result
 
     async def search_round_trip(self, origin, destination, departure_date, return_date=None, adults=1, currency="CNY", max_results=10):
-        params = {
+        # SerpApi 往返搜索的 flights[] 只返回去程航段（价格是往返总价），
+        # 因此这里按两个单程搜索分别取航段与分段价，再组合报价，总价 = 去程 + 返程。
+        outbound = await self._oneway_offers(origin, destination, departure_date, adults, currency, max_results)
+        if not return_date:
+            return [FlightOffer(price_total=p, currency=currency, outbound=segs) for p, segs in outbound]
+
+        inbound = await self._oneway_offers(destination, origin, return_date, adults, currency, 3)
+        if not inbound:
+            return [FlightOffer(price_total=p, currency=currency, outbound=segs) for p, segs in outbound]
+
+        out_top = outbound[: min(4, len(outbound))]
+        in_top = inbound[: min(2, len(inbound))]
+        pairs: list[FlightOffer] = []
+        for op, osegs in out_top:
+            for ip, isegs in in_top:
+                pairs.append(FlightOffer(
+                    price_total=round(op + ip, 2),
+                    currency=currency,
+                    outbound=osegs,
+                    inbound=isegs,
+                    outbound_price=op,
+                    inbound_price=ip,
+                ))
+        pairs.sort(key=lambda o: o.price_total)
+        return pairs[:max_results]
+
+    async def _oneway_offers(self, origin, destination, d, adults, currency, limit):
+        """单程搜索：返回 [(价格, 航段列表)]，按价格升序。"""
+        data = await self._search({
             "engine": "google_flights",
             "departure_id": origin,
             "arrival_id": destination,
-            "outbound_date": departure_date,
+            "outbound_date": d,
+            "type": "2",
             "currency": currency,
             "adults": adults,
             "hl": "zh-cn",
             "sort_by": "2",  # 按价格排序
-        }
-        if return_date:
-            params.update({"type": "1", "return_date": return_date})
-        else:
-            params["type"] = "2"
-        data = await self._search(params, ttl=600)
+        }, ttl=600)
 
-        offers: list[FlightOffer] = []
+        result: list[tuple[float, list[Segment]]] = []
         raw = (data.get("best_flights") or []) + (data.get("other_flights") or [])
         for item in raw:
             price = item.get("price")
-            if price is None:
-                continue
             legs = item.get("flights") or []
-            out_segs, in_segs = self._split_legs(legs, origin, destination)
-            offers.append(FlightOffer(
-                price_total=float(price),
-                currency=currency,
-                outbound=out_segs,
-                inbound=in_segs,
-            ))
-        offers.sort(key=lambda o: o.price_total)
-        return offers[:max_results]
-
-    @staticmethod
-    def _split_legs(legs, origin, destination):
-        """把全部航段拆成去程/返程：找到第一个从目的地起飞的航段作为返程起点。"""
-        segs = [SerpApiProvider._parse_leg(leg) for leg in legs]
-        split_at = None
-        for i, s in enumerate(segs):
-            if i > 0 and s.departure_iata == destination:
-                split_at = i
-                break
-        if split_at is None:
-            return segs, []
-        return segs[:split_at], segs[split_at:]
+            if price is None or not legs:
+                continue
+            result.append((float(price), [self._parse_leg(l) for l in legs]))
+        result.sort(key=lambda x: x[0])
+        return result[:limit]
 
     @staticmethod
     def _parse_leg(leg: dict) -> Segment:

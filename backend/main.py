@@ -278,6 +278,8 @@ def _offer_to_dict(o) -> dict:
         "currency": o.currency,
         "outbound": out_segs,
         "inbound": in_segs,
+        "outbound_price": o.outbound_price,
+        "inbound_price": o.inbound_price,
         "outbound_stops": max(0, len(out_segs) - 1),
         "inbound_stops": max(0, len(in_segs) - 1),
         "outbound_duration_minutes": sum(s["duration_minutes"] for s in out_segs),
